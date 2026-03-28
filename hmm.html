@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DITZYA AI | SAHABAT ISLAMI 🌙</title>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;500;700&family=Orbitron:wght@600&display=swap');
+        
+        :root { 
+            --primary: #00d2ff; 
+            --secondary: #3a7bd5;
+            --glass: rgba(255, 255, 255, 0.05);
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background: #05070a;
+            background-image: radial-gradient(circle at 20% 30%, #1a2a6c 0%, transparent 40%),
+                              radial-gradient(circle at 80% 70%, #b21f1f 0%, transparent 40%);
+            color: #fff; height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+        }
+
+        /* LOGIN / REGISTRASI */
+        #login-screen {
+            position: fixed; inset: 0; background: #05070a; z-index: 2000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .login-card {
+            background: var(--glass); backdrop-filter: blur(20px); border: 1px solid var(--border);
+            padding: 40px; border-radius: 30px; text-align: center; width: 90%; max-width: 400px;
+        }
+
+        /* HEADER */
+        header { 
+            padding: 20px; background: rgba(0,0,0,0.3); backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;
+        }
+        .user-online { font-size: 0.7rem; color: #00ff88; display: flex; align-items: center; gap: 5px; }
+        .online-dot { width: 8px; height: 8px; background: #00ff88; border-radius: 50%; box-shadow: 0 0 10px #00ff88; }
+
+        /* CHAT BOX */
+        #chat-container { 
+            flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px;
+            background: rgba(0,0,0,0.2);
+        }
+        .msg { max-width: 80%; padding: 15px 20px; border-radius: 20px; font-size: 0.95rem; line-height: 1.6; animation: slideUp 0.3s ease; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } }
+        
+        .user { align-self: flex-end; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: #000; font-weight: 700; border-bottom-right-radius: 2px; }
+        .ai { align-self: flex-start; background: var(--glass); border: 1px solid var(--border); border-bottom-left-radius: 2px; }
+
+        /* INPUT AREA */
+        .input-area { padding: 20px; display: flex; gap: 10px; background: rgba(0,0,0,0.4); border-top: 1px solid var(--border); }
+        input { 
+            flex: 1; background: var(--glass); border: 1px solid var(--border); 
+            padding: 15px 20px; border-radius: 30px; color: white; outline: none;
+        }
+        .btn-circle { width: 50px; height: 50px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.3s; }
+        .btn-send { background: var(--primary); color: #000; }
+        .btn-img { background: var(--glass); border: 1px solid var(--border); color: #fff; }
+
+        .health-alert { font-size: 0.7rem; color: #ffcc00; text-align: center; padding: 5px; background: rgba(255,204,0,0.1); display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- SCREEN PENDAFTARAN -->
+    <div id="login-screen">
+        <div class="login-card">
+            <h2 style="font-family:'Orbitron'; margin-bottom: 10px; color: var(--primary);">DITZYA AI</h2>
+            <p style="font-size: 0.8rem; color: #aaa; margin-bottom: 25px;">Assalamu'alaikum, Kenalan dulu yuk!</p>
+            <input type="text" id="reg-name" placeholder="Masukkan Nama Kamu..." style="width:100%; margin-bottom: 15px;">
+            <button class="btn-circle" onclick="registerUser()" style="width:100%; border-radius: 15px; font-family:'Orbitron';">MULAI CURHAT</button>
+        </div>
+    </div>
+
+    <header>
+        <div>
+            <h1 style="font-family:'Orbitron'; font-size: 1rem; color: var(--primary);">DITZYA <span style="color:#fff">FRIEND</span></h1>
+            <p id="welcome-text" style="font-size: 0.6rem; color: #888;">Assalamu'alaikum...</p>
+        </div>
+        <div class="user-online">
+            <div class="online-dot"></div>
+            <span id="active-users">124 Pengguna Aktif</span>
+        </div>
+    </header>
+
+    <div class="health-alert" id="health-box">⚠️ Bang, sudah lama curhatnya. Istirahat sebentar yuk, biar mata nggak capek.</div>
+
+    <div id="chat-container"></div>
+
+    <div class="input-area">
+        <button class="btn-circle btn-img" onclick="alert('Fitur upload foto sedang disiapkan Ditzya!')">📸</button>
+        <input type="text" id="user-input" placeholder="Tulis pesanmu di sini..." autocomplete="off">
+        <button class="btn-circle btn-send" onclick="sendMessage()">✈️</button>
+    </div>
+
+    <script type="importmap">
+      { "imports": { "@google/generative-ai": "https://esm.run/@google/generative-ai" } }
+    </script>
+
+    <script type="module">
+        import { GoogleGenerativeAI } from "@google/generative-ai";
+
+        const API_KEY = "AIzaSyB6vTfwS5dDWYTSKAlTDoQHgE903mGg3ac";
+        const genAI = new GoogleGenerativeAI(API_KEY);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+        let userName = localStorage.getItem('ditzya_user');
+        let chatCount = 0;
+        let chatHistory = [];
+
+        // CEK USER SUDAH DAFTAR ATAU BELUM
+        if (userName) {
+            document.getElementById('login-screen').style.display = 'none';
+            initChat();
+        }
+
+        window.registerUser = function() {
+            const name = document.getElementById('reg-name').value.trim();
+            if (name) {
+                localStorage.setItem('ditzya_user', name);
+                userName = name;
+                document.getElementById('login-screen').style.display = 'none';
+                initChat();
+            }
+        };
+
+        function initChat() {
+            document.getElementById('welcome-text').innerText = `Halo Sahabat, ${userName}! ✨`;
+            // System Prompt Islami & Ramah
+            chatHistory = [
+                { role: "user", parts: [{ text: `Nama saya ${userName}. Mulai sekarang, bicaralah padaku dengan sangat ramah, sopan santun, menggunakan kata-kata Islami seperti 'Akhi', 'Ukhti', 'Barakallah', atau 'Alhamdulillah' sesuai konteks. Jadilah teman curhat yang baik, panggil aku dengan namaku, dan ingatkan aku untuk istirahat jika aku sudah terlalu lama chat.` }] },
+                { role: "model", parts: [{ text: `Masya Allah, Ahlan wa Sahlan Bang ${userName}! Senang sekali bisa mengenalmu. Aku siap menemanimu kapan saja, insya Allah aku akan jadi pendengar yang baik. Mau cerita apa hari ini?` }] }
+            ];
+            appendMessage("ai", `Assalamu'alaikum, Bang ${userName}! Senang sekali bertemu lagi. Ada yang mau dicurhatin hari ini?`);
+            simulateActiveUsers();
+            keepScreenAlive();
+        }
+
+        async function keepScreenAlive() {
+            try { if ('wakeLock' in navigator) await navigator.wakeLock.request('screen'); } catch(e){}
+        }
+
+        function simulateActiveUsers() {
+            setInterval(() => {
+                const random = Math.floor(Math.random() * (150 - 120) + 120);
+                document.getElementById('active-users').innerText = `${random} Pengguna Aktif`;
+            }, 5000);
+        }
+
+        window.sendMessage = async function() {
+            const text = document.getElementById('user-input').value.trim();
+            if (!text) return;
+
+            appendMessage("user", text);
+            document.getElementById('user-input').value = "";
+            chatCount++;
+
+            // CEK DURASI / JUMLAH CHAT UNTUK ISTIRAHAT
+            if (chatCount > 15) {
+                document.getElementById('health-box').style.display = "block";
+            }
+
+            chatHistory.push({ role: "user", parts: [{ text: text }] });
+
+            try {
+                const chat = model.startChat({ history: chatHistory });
+                const result = await chat.sendMessage(text);
+                const response = await result.response;
+                const aiText = response.text();
+
+                appendMessage("ai", aiText);
+                chatHistory.push({ role: "model", parts: [{ text: aiText }] });
+                
+                // Jika sudah lama, AI menambahkan pesan istirahat
+                if(chatCount === 15) {
+                    appendMessage("ai", `Oiya Bang ${userName}, sepertinya kita sudah cukup lama berbincang. Jangan lupa istirahat sejenak ya, jaga kesehatan matamu. Shalat atau dzikir dulu juga boleh, biar hati makin tenang. 😊`);
+                }
+
+            } catch (err) {
+                appendMessage("ai", "Maaf ya Bang, sepertinya sinyalnya kurang lancar. Boleh diulangi?");
+            }
+        };
+
+        function appendMessage(sender, text) {
+            const container = document.getElementById('chat-container');
+            const div = document.createElement('div');
+            div.className = `msg ${sender}`;
+            div.innerText = text;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Support Enter
+        document.getElementById('user-input').addEventListener("keypress", (e) => {
+            if (e.key === "Enter") sendMessage();
+        });
+    </script>
+</body>
+</html>
