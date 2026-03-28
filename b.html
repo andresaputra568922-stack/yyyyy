@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADITIYA SNAKES | MULTIPLAYER ONLINE 🔥</title>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Plus+Jakarta+Sans:wght@400;700&display=swap');
+        :root { --blue: #00f2ff; --pink: #ff0055; --gold: #ffcc00; --bg: #0a0a0c; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg); color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
+
+        /* LOBBY MENU */
+        #menu { position: fixed; inset: 0; background: radial-gradient(circle, #111, #000); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        .input-box { background: #111; border: 1px solid #333; padding: 12px; border-radius: 10px; color: white; width: 250px; text-align: center; margin-bottom: 15px; font-size: 1rem; }
+        .btn-start { padding: 15px 40px; border-radius: 50px; border: none; background: var(--pink); color: white; font-family: 'Orbitron'; cursor: pointer; font-weight: bold; transition: 0.3s; box-shadow: 0 0 20px rgba(255,0,85,0.4); }
+        .btn-start:hover { transform: scale(1.1); box-shadow: 0 0 40px var(--pink); }
+
+        /* BOARD AREA */
+        #game-container { display: none; flex-direction: row; gap: 30px; padding: 20px; align-items: flex-start; }
+        #board { display: grid; grid-template-columns: repeat(10, 50px); grid-template-rows: repeat(10, 50px); background: #111; border: 5px solid #333; position: relative; }
+        .cell { width: 50px; height: 50px; border: 1px solid #222; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #444; position: relative; }
+        .cell:nth-child(even) { background: #151515; }
+
+        /* PLAYER PION */
+        .pion { width: 30px; height: 30px; border-radius: 50%; position: absolute; transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 10; border: 3px solid white; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
+
+        /* CONTROLS */
+        #controls { background: rgba(255,255,255,0.05); padding: 25px; border-radius: 20px; border: 1px solid var(--blue); width: 250px; text-align: center; }
+        .dice { width: 80px; height: 80px; background: white; color: black; border-radius: 15px; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; font-weight: bold; margin: 20px auto; cursor: pointer; transition: 0.2s; box-shadow: 0 10px 0 #ccc; }
+        .dice:active { transform: translateY(5px); box-shadow: 0 5px 0 #ccc; }
+        .status-turn { font-family: 'Orbitron'; font-size: 0.8rem; color: var(--gold); margin-bottom: 10px; }
+
+        /* SNAKE & LADDER LINES */
+        canvas#lines { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 5; }
+
+        @media (max-width: 800px) {
+            #game-container { flex-direction: column; align-items: center; overflow-y: auto; }
+            #board { grid-template-columns: repeat(10, 35px); grid-template-rows: repeat(10, 35px); }
+            .cell { width: 35px; height: 35px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="menu">
+        <h1 style="font-family:'Orbitron'; font-size: 2.5rem; margin-bottom: 5px;">ADITIYA<span> SNAKES</span></h1>
+        <p style="color: #555; margin-bottom: 30px; font-size: 0.8rem; letter-spacing: 3px;">ULUR TANGGA MULTIPLAYER</p>
+        <input type="text" id="playerName" class="input-box" placeholder="Nickname...">
+        <input type="text" id="roomId" class="input-box" placeholder="ID Room Mabar..." value="ADIT-1">
+        <button class="btn-start" onclick="initGame()">MASUK ARENA 🎲</button>
+    </div>
+
+    <div id="game-container">
+        <div style="position: relative;">
+            <div id="board"></div>
+            <canvas id="lines"></canvas>
+        </div>
+
+        <div id="controls">
+            <div class="status-turn" id="turnInfo">MENUNGGU PEMAIN...</div>
+            <div id="diceResult" class="dice" onclick="rollDice()">?</div>
+            <p style="font-size: 0.7rem; color: #666;">Klik Dadu untuk Jalan</p>
+            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #333;">
+            <div style="text-align: left; font-size: 0.8rem;">
+                💰 Koin: <span id="uiCoin" style="color:var(--gold)">0</span><br>
+                💎 DM: <span id="uiDM" style="color:var(--blue)">0</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // CONFIG FIREBASE
+        const firebaseConfig = {
+            apiKey: "AIzaSyD0Rx5rl4M95exw46daUAubMIXJZ7c2EWY",
+            authDomain: "yesss-ffb8d.firebaseapp.com",
+            projectId: "yesss-ffb8d",
+            databaseURL: "https://yesss-ffb8d-default-rtdb.firebaseio.com",
+            storageBucket: "yesss-ffb8d.firebasestorage.app",
+            messagingSenderId: "853380439217",
+            appId: "1:853380439217:web:31391122a25f07dec9d690"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let myId, myName, myRoom;
+        let myPos = 0;
+        let isMyTurn = false;
+        let players = {};
+        
+        // POSISI ULAR & TANGGA (Start: End)
+        const jumps = {
+            3: 22, 5: 8, 11: 26, 20: 41, // Tangga
+            17: 4, 19: 7, 21: 9, 27: 1,  // Ular
+            36: 55, 50: 91, 70: 89,      // Tangga High
+            99: 5, 95: 75, 88: 54, 62: 18 // Ular High
+        };
+
+        function initGame() {
+            myName = document.getElementById('playerName').value || "Adit_" + Math.floor(Math.random()*99);
+            myRoom = document.getElementById('roomId').value || "ADIT-1";
+            myId = myName.replace(/\s+/g, '_');
+
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('game-container').style.display = 'flex';
+
+            createBoard();
+
+            // Mabar Sync
+            const pRef = db.ref(`snakes/${myRoom}/players/${myId}`);
+            pRef.set({ name: myName, pos: 0, color: '#' + Math.floor(Math.random()*16777215).toString(16) });
+            pRef.onDisconnect().remove();
+
+            // Listen Players
+            db.ref(`snakes/${myRoom}/players`).on('value', snap => {
+                players = snap.val() || {};
+                updatePions();
+                checkTurnSystem();
+            });
+
+            // Turn System (Siapa cepat dia jalan duluan)
+            db.ref(`snakes/${myRoom}/turn`).on('value', snap => {
+                const currentTurn = snap.val();
+                if(!currentTurn) {
+                    db.ref(`snakes/${myRoom}/turn`).set(myId);
+                }
+                isMyTurn = (currentTurn === myId);
+                document.getElementById('turnInfo').innerText = isMyTurn ? "GILIRAN KAMU!" : "GILIRAN LAWAN...";
+                document.getElementById('turnInfo').style.color = isMyTurn ? "var(--blue)" : "var(--pink)";
+            });
+        }
+
+        function createBoard() {
+            const board = document.getElementById('board');
+            for (let i = 100; i >= 1; i--) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.id = 'cell-' + i;
+                cell.innerText = i;
+                board.appendChild(cell);
+            }
+        }
+
+        function rollDice() {
+            if(!isMyTurn) return alert("Sabar Bang, giliran lawan!");
+
+            const dice = Math.floor(Math.random() * 6) + 1;
+            document.getElementById('diceResult').innerText = dice;
+            
+            myPos += dice;
+            if(myPos > 100) myPos = 100 - (myPos - 100);
+
+            // Cek Ular/Tangga
+            if(jumps[myPos]) {
+                const oldPos = myPos;
+                myPos = jumps[myPos];
+                alert(myPos > oldPos ? "WIDIH NAIK TANGGA! 🚀" : "YAH KENA ULAR... 🐍");
+            }
+
+            // Update ke Firebase
+            db.ref(`snakes/${myRoom}/players/${myId}`).update({ pos: myPos });
+
+            if(myPos === 100) {
+                alert("SELAMAT BANG ADITIYA MENANG! 🎉");
+                db.ref(`snakes/${myRoom}/players/${myId}`).update({ pos: 0 });
+            }
+
+            // Ganti Giliran
+            const playerIds = Object.keys(players);
+            const myIndex = playerIds.indexOf(myId);
+            const nextIndex = (myIndex + 1) % playerIds.length;
+            db.ref(`snakes/${myRoom}/turn`).set(playerIds[nextIndex]);
+        }
+
+        function updatePions() {
+            // Hapus pion lama
+            document.querySelectorAll('.pion').forEach(p => p.remove());
+            
+            Object.keys(players).forEach(id => {
+                const pData = players[id];
+                if(pData.pos === 0) return;
+
+                const cell = document.getElementById('cell-' + pData.pos);
+                const rect = cell.getBoundingClientRect();
+                const boardRect = document.getElementById('board').getBoundingClientRect();
+
+                const pion = document.createElement('div');
+                pion.className = 'pion';
+                pion.style.backgroundColor = pData.color;
+                pion.style.left = (rect.left - boardRect.left + 10) + 'px';
+                pion.style.top = (rect.top - boardRect.top + 10) + 'px';
+                pion.title = pData.name;
+                
+                document.getElementById('board').appendChild(pion);
+            });
+        }
+
+        function checkTurnSystem() {
+            const count = Object.keys(players).length;
+            if(count < 2) {
+                document.getElementById('turnInfo').innerText = "MENUNGGU LAWAN...";
+                isMyTurn = false;
+            }
+        }
+    </script>
+</body>
+</html>
