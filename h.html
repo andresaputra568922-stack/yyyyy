@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADITIYA SNAKES PRO | FIXED MULTIPLAYER 🔥</title>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Plus+Jakarta+Sans:wght@400;700&display=swap');
+        :root { --blue: #00f2ff; --pink: #ff0055; --gold: #ffcc00; --bg: #050507; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg); color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
+
+        /* LOBBY */
+        #menu { position: fixed; inset: 0; background: #000; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .input-box { background: #111; border: 1px solid var(--blue); padding: 12px; border-radius: 10px; color: white; width: 260px; text-align: center; margin-bottom: 15px; }
+        .btn-play { background: var(--blue); color: black; padding: 15px 50px; border: none; border-radius: 50px; font-weight: bold; cursor: pointer; font-family: 'Orbitron'; transition: 0.3s; }
+
+        /* GAME LAYOUT */
+        #game-area { display: none; gap: 20px; flex-wrap: wrap; justify-content: center; padding: 20px; }
+        #board { 
+            display: grid; 
+            grid-template-columns: repeat(10, 45px); 
+            grid-template-rows: repeat(10, 45px); 
+            background: #111; border: 4px solid #333; 
+            position: relative; 
+        }
+        .cell { width: 45px; height: 45px; border: 1px solid #222; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; color: #555; position: relative; }
+        
+        /* PION */
+        .pion { 
+            width: 25px; height: 25px; border-radius: 50%; 
+            position: absolute; transition: all 0.4s ease; 
+            z-index: 100; border: 2px solid #fff; 
+            transform: translate(10px, 10px);
+        }
+
+        /* UI CONTROLS */
+        #ui { background: #111; padding: 20px; border-radius: 20px; border: 1px solid var(--blue); width: 280px; text-align: center; }
+        .dice-btn { 
+            width: 70px; height: 70px; background: white; color: black; 
+            border-radius: 15px; display: flex; align-items: center; justify-content: center; 
+            font-size: 2rem; font-weight: bold; margin: 15px auto; cursor: pointer;
+            box-shadow: 0 5px 0 #bbb; transition: 0.1s;
+        }
+        .dice-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #bbb; }
+        .dice-disabled { opacity: 0.3; cursor: not-allowed; filter: grayscale(1); }
+        
+        .btn-donasi { background: var(--gold); color: black; width: 100%; padding: 10px; border-radius: 10px; border: none; margin-top: 15px; font-weight: bold; cursor: pointer; }
+
+        @media (max-width: 500px) { #board { grid-template-columns: repeat(10, 32px); grid-template-rows: repeat(10, 32px); } .cell { width: 32px; height: 32px; } .pion { width: 18px; height: 18px; transform: translate(7px, 7px); } }
+    </style>
+</head>
+<body>
+
+    <div id="menu">
+        <h1 style="font-family:'Orbitron'; color: var(--blue);">ADIT ARENA <span style="color:var(--pink)">V5</span></h1>
+        <p style="color: #666; margin-bottom: 20px;">Fix Multiplayer & Donation System</p>
+        <input type="text" id="pName" class="input-box" placeholder="Nickname Anda...">
+        <input type="text" id="rId" class="input-box" placeholder="Room ID..." value="ADIT-ARENA">
+        <button class="btn-play" onclick="gasGame()">MULAI MAIN! 🎲</button>
+    </div>
+
+    <div id="game-area">
+        <div id="board"></div>
+        
+        <div id="ui">
+            <div id="turnStatus" style="color: var(--gold); font-family: 'Orbitron'; font-size: 0.8rem;">LOADING...</div>
+            <div id="diceVal" class="dice-btn" onclick="kocokDadu()">?</div>
+            <p id="msg" style="font-size: 0.7rem; min-height: 20px; color: var(--blue);"></p>
+            
+            <div style="background: #222; padding: 10px; border-radius: 10px; margin-top: 10px; text-align: left; font-size: 0.8rem;">
+                👑 Player Online: <span id="pCount">0</span><br>
+                💎 DM Anda: <span id="uiDM">0</span>
+            </div>
+
+            <button class="btn-donasi" onclick="donasi()">🔥 DONASI UPDATE GAME</button>
+        </div>
+    </div>
+
+    <script>
+        // FIREBASE SETUP
+        const firebaseConfig = {
+            apiKey: "AIzaSyD0Rx5rl4M95exw46daUAubMIXJZ7c2EWY",
+            authDomain: "yesss-ffb8d.firebaseapp.com",
+            projectId: "yesss-ffb8d",
+            databaseURL: "https://yesss-ffb8d-default-rtdb.firebaseio.com",
+            storageBucket: "yesss-ffb8d.firebasestorage.app",
+            messagingSenderId: "853380439217",
+            appId: "1:853380439217:web:31391122a25f07dec9d690"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let myId, myRoom, myName;
+        let myPos = 0;
+        let isMyTurn = false;
+        const jumps = { 3:22, 5:15, 11:26, 20:41, 36:55, 50:91, 17:4, 19:7, 27:1, 99:5, 95:75, 88:54 };
+
+        function gasGame() {
+            myName = document.getElementById('pName').value || "User" + Math.floor(Math.random()*99);
+            myRoom = document.getElementById('rId').value || "ARENA";
+            myId = myName.replace(/\W/g, '_');
+
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('game-area').style.display = 'flex';
+
+            renderBoard();
+
+            // Register Player
+            const pRef = db.ref(`game/${myRoom}/players/${myId}`);
+            pRef.set({ name: myName, pos: 0, color: '#' + Math.floor(Math.random()*16777215).toString(16) });
+            pRef.onDisconnect().remove();
+
+            // Sync Data
+            db.ref(`game/${myRoom}/players`).on('value', snap => {
+                const players = snap.val() || {};
+                const pKeys = Object.keys(players);
+                document.getElementById('pCount').innerText = pKeys.length;
+                updatePions(players);
+                
+                // Turn Logic: Kalau cuma sendiri, selalu turn kita. Kalau berdua, gantian.
+                db.ref(`game/${myRoom}/turn`).on('value', turnSnap => {
+                    let currentTurn = turnSnap.val();
+                    if(!currentTurn || !players[currentTurn]) {
+                        db.ref(`game/${myRoom}/turn`).set(myId);
+                        currentTurn = myId;
+                    }
+                    
+                    isMyTurn = (currentTurn === myId);
+                    const turnInfo = document.getElementById('turnStatus');
+                    const diceBtn = document.getElementById('diceVal');
+
+                    if(pKeys.length < 2) {
+                        turnInfo.innerText = "MODE: SOLO (Bebas Jalan)";
+                        isMyTurn = true;
+                        diceBtn.classList.remove('dice-disabled');
+                    } else {
+                        turnInfo.innerText = isMyTurn ? "GILIRAN KAMU!" : "GILIRAN LAWAN...";
+                        if(isMyTurn) diceBtn.classList.remove('dice-disabled');
+                        else diceBtn.classList.add('dice-disabled');
+                    }
+                });
+            });
+        }
+
+        function renderBoard() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+            for (let i = 100; i >= 1; i--) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.id = 'c' + i;
+                cell.innerText = i;
+                board.appendChild(cell);
+            }
+        }
+
+        function kocokDadu() {
+            if(!isMyTurn) return;
+
+            const roll = Math.floor(Math.random() * 6) + 1;
+            document.getElementById('diceVal').innerText = roll;
+            
+            myPos += roll;
+            if(myPos > 100) myPos = 100 - (myPos - 100);
+
+            let msg = "Jalan " + roll + " langkah.";
+            if(jumps[myPos]) {
+                const old = myPos;
+                myPos = jumps[myPos];
+                msg = myPos > old ? "MANTAP NAIK TANGGA! 🚀" : "YAH KENA ULAR... 🐍";
+            }
+            document.getElementById('msg').innerText = msg;
+
+            // Update Firebase
+            db.ref(`game/${myRoom}/players/${myId}`).update({ pos: myPos });
+
+            if(myPos === 100) {
+                alert("MENANG JOS JISS!");
+                db.ref(`game/${myRoom}/players/${myId}`).update({ pos: 0 });
+                myPos = 0;
+            }
+
+            // Ganti Giliran kalau ada lawan
+            db.ref(`game/${myRoom}/players`).once('value', snap => {
+                const players = snap.val();
+                const ids = Object.keys(players);
+                if(ids.length > 1) {
+                    const nextIdx = (ids.indexOf(myId) + 1) % ids.length;
+                    db.ref(`game/${myRoom}/turn`).set(ids[nextIdx]);
+                }
+            });
+        }
+
+        function updatePions(players) {
+            document.querySelectorAll('.pion').forEach(p => p.remove());
+            Object.keys(players).forEach(id => {
+                const p = players[id];
+                if(p.pos > 0) {
+                    const cell = document.getElementById('c' + p.pos);
+                    const pion = document.createElement('div');
+                    pion.className = 'pion';
+                    pion.style.backgroundColor = p.color;
+                    cell.appendChild(pion);
+                }
+            });
+        }
+
+        function donasi() {
+            const order_id = "DONASI-" + myId + "-" + Date.now();
+            // Link Pakasir Abang Aditiya
+            window.open(`https://app.pakasir.com/pay/yy/10000?order_id=${order_id}`, "_blank");
+        }
+    </script>
+</body>
+</html>
