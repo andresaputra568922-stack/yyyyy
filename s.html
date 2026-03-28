@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADITIYA ARENA | SOLO & MABAR 🔥</title>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Plus+Jakarta+Sans:wght@400;700&display=swap');
+        :root { --blue: #00f2ff; --pink: #ff0055; --gold: #ffcc00; --green: #39ff14; --bg: #050507; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg); color: white; overflow: hidden; }
+        
+        /* MENU SELECTION */
+        #menu { position: fixed; inset: 0; background: radial-gradient(circle, #111, #000); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
+        .input-group { margin: 20px 0; }
+        .input-box { background: #111; border: 1px solid #333; padding: 12px; border-radius: 10px; color: white; width: 250px; text-align: center; margin-bottom: 10px; }
+        .mode-container { display: flex; gap: 20px; margin-top: 20px; }
+        .btn-mode { padding: 20px 30px; border-radius: 15px; border: 2px solid var(--blue); background: none; color: white; font-family: 'Orbitron'; cursor: pointer; transition: 0.3s; width: 180px; }
+        .btn-mode:hover { background: var(--blue); color: black; box-shadow: 0 0 20px var(--blue); }
+        .btn-mode.multi { border-color: var(--pink); }
+        .btn-mode.multi:hover { background: var(--pink); border-color: var(--pink); }
+
+        /* HUD */
+        #gameUI { position: fixed; top: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 15px; border: 1px solid var(--blue); display: none; }
+        #waiting { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: 'Orbitron'; color: var(--pink); display: none; font-size: 1.5rem; text-align: center; }
+        
+        .side-btns { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .circle-btn { width: 50px; height: 50px; border-radius: 50%; border: none; cursor: pointer; font-size: 1.2rem; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+
+    <div id="menu">
+        <h1 style="font-family:'Orbitron'; font-size: 3rem; margin-bottom: 10px;">ADITIYA<span> PRO</span></h1>
+        <p style="color: #666;">Pilih Mode Main Abang!</p>
+        
+        <div class="input-group">
+            <input type="text" id="playerName" class="input-box" placeholder="Nickname..."><br>
+            <input type="text" id="roomId" class="input-box" placeholder="ID Room (Untuk Mabar)..." value="ROOM-1">
+        </div>
+
+        <div class="mode-container">
+            <button class="btn-mode" onclick="initGame('solo')">🕹️ SOLO<br><small>Lawan Bot</small></button>
+            <button class="btn-mode multi" onclick="initGame('mabar')">👥 MABAR<br><small>Minimal 2 Orang</small></button>
+        </div>
+    </div>
+
+    <div id="waiting">MENUNGGU LAWAN MASUK...<br><small style="font-size: 0.8rem; color: #555;">Room ID: <span id="waitRoom"></span></small></div>
+
+    <div id="gameUI">
+        <div id="uiMode" style="font-size: 0.7rem; color: var(--gold); margin-bottom: 5px;">MODE: SOLO</div>
+        <div style="font-family: 'Orbitron'; font-size: 1.2rem;"><span id="uiName">PLAYER</span></div>
+        <div style="margin-top: 10px; font-size: 0.9rem;">
+            💰 <span id="uiCoin">0</span> | 💎 <span id="uiDM">0</span> | ❤️ <span id="uiLives">3</span>
+        </div>
+    </div>
+
+    <div class="side-btns">
+        <button class="circle-btn" style="background: var(--gold);" onclick="location.reload()">🏠</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyD0Rx5rl4M95exw46daUAubMIXJZ7c2EWY",
+            authDomain: "yesss-ffb8d.firebaseapp.com",
+            projectId: "yesss-ffb8d",
+            databaseURL: "https://yesss-ffb8d-default-rtdb.firebaseio.com",
+            storageBucket: "yesss-ffb8d.firebasestorage.app",
+            messagingSenderId: "853380439217",
+            appId: "1:853380439217:web:31391122a25f07dec9d690"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let canvas = document.getElementById('gameCanvas');
+        let ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let myId, myName, myRoom, gameMode;
+        let players = {};
+        let myData = { coin: 0, dm: 0, lives: 3, hp: 100 };
+        let bot = { x: 0, y: 0, speed: 2 };
+
+        function initGame(mode) {
+            gameMode = mode;
+            myName = document.getElementById('playerName').value || "Adit_" + Math.floor(Math.random()*99);
+            myRoom = document.getElementById('roomId').value || "ROOM-1";
+            myId = myName.replace(/\s+/g, '_');
+
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('gameUI').style.display = 'block';
+            document.getElementById('uiName').innerText = myName;
+            document.getElementById('uiMode').innerText = "MODE: " + mode.toUpperCase();
+
+            // Load Firebase Data
+            db.ref(`users/${myId}`).on('value', snap => {
+                if(snap.exists()) myData = snap.val();
+                updateHUD();
+            });
+
+            if(mode === 'mabar') {
+                document.getElementById('waitRoom').innerText = myRoom;
+                db.ref(`rooms/${myRoom}/players/${myId}`).set({ name: myName, x: 200, y: 200, color: '#00f2ff' });
+                db.ref(`rooms/${myRoom}/players/${myId}`).onDisconnect().remove();
+                
+                db.ref(`rooms/${myRoom}/players`).on('value', snap => {
+                    players = snap.val() || {};
+                    const count = Object.keys(players).length;
+                    document.getElementById('waiting').style.display = (count < 2) ? 'block' : 'none';
+                });
+            } else {
+                players[myId] = { name: myName, x: 200, y: 200, color: '#00f2ff' };
+                bot = { x: canvas.width - 100, y: canvas.height - 100, speed: 3 };
+            }
+            gameLoop();
+        }
+
+        const keys = {};
+        window.addEventListener('keydown', e => keys[e.code] = true);
+        window.addEventListener('keyup', e => keys[e.code] = false);
+
+        function update() {
+            if(gameMode === 'mabar' && Object.keys(players).length < 2) return;
+
+            let me = players[myId];
+            if(!me) return;
+
+            if(keys['KeyW']) me.y -= 5;
+            if(keys['KeyS']) me.y += 5;
+            if(keys['KeyA']) me.x -= 5;
+            if(keys['KeyD']) me.x += 5;
+
+            if(gameMode === 'solo') {
+                // Bot logic: ngejar pemain
+                if(bot.x < me.x) bot.x += bot.speed;
+                if(bot.x > me.x) bot.x -= bot.speed;
+                if(bot.y < me.y) bot.y += bot.speed;
+                if(bot.y > me.y) bot.y -= bot.speed;
+
+                // Cek Tabrakan Bot
+                let dist = Math.hypot(me.x - bot.x, me.y - bot.y);
+                if(dist < 30) {
+                    myData.lives--;
+                    me.x = 200; me.y = 200; // Reset posisi
+                    if(myData.lives <= 0) {
+                        alert("GAME OVER! Nyawa Habis.");
+                        location.reload();
+                    }
+                    saveData();
+                }
+            } else {
+                // Update ke Firebase untuk Mabar
+                db.ref(`rooms/${myRoom}/players/${myId}`).update({ x: me.x, y: me.y });
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = '#050507';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Grid Effect
+            ctx.strokeStyle = '#111';
+            for(let i=0; i<canvas.width; i+=50) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
+            for(let i=0; i<canvas.height; i+=50) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvas.width,i); ctx.stroke(); }
+
+            // Draw Bot
+            if(gameMode === 'solo') {
+                ctx.fillStyle = '#ff0055';
+                ctx.shadowBlur = 20; ctx.shadowColor = 'red';
+                ctx.beginPath(); ctx.arc(bot.x, bot.y, 15, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = "white"; ctx.fillText("EVIL BOT", bot.x - 20, bot.y - 25);
+            }
+
+            // Draw Players
+            Object.values(players).forEach(p => {
+                ctx.fillStyle = p.color || '#00f2ff';
+                ctx.shadowBlur = 15; ctx.shadowColor = ctx.fillStyle;
+                ctx.beginPath(); ctx.arc(p.x, p.y, 20, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = "white"; ctx.font = "12px Orbitron";
+                ctx.textAlign = "center";
+                ctx.fillText(p.name, p.x, p.y - 30);
+            });
+        }
+
+        function updateHUD() {
+            document.getElementById('uiCoin').innerText = Math.floor(myData.coin);
+            document.getElementById('uiDM').innerText = myData.dm;
+            document.getElementById('uiLives').innerText = myData.lives;
+        }
+
+        function saveData() { db.ref(`users/${myId}`).set(myData); }
+
+        function gameLoop() {
+            update(); draw(); requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>
